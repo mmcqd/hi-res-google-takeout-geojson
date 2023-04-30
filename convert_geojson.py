@@ -15,7 +15,7 @@ PARAMS = {
 }
 
 def activity_segment(segment):
-    return LineString(
+    return (LineString(
         [
             (segment["startLocation"]["longitudeE7"] / 10e6, 
              segment["startLocation"]["latitudeE7"] / 10e6),
@@ -25,13 +25,19 @@ def activity_segment(segment):
             (segment["endLocation"]["longitudeE7"] / 10e6,
              segment["endLocation"]["latitudeE7"] / 10e6)
         ]
-    )
+    ),{})
 
 def place_visit(visit):
-    return Point(
+    properties = {}
+    if "name" in visit["location"]:
+        properties["name"] = visit["location"]["name"]
+    if "address" in visit["location"]:
+        properties["address"] = visit["location"]["address"]
+
+    return (Point(
         (visit["location"]["longitudeE7"] / 10e6, 
          visit["location"]["latitudeE7"] / 10e6)
-    )
+    ), properties)
 
 
 def waypoint(lat,lng):
@@ -87,7 +93,7 @@ def send_route_request(body):
         raise Exception(resp.text)
     print("Recieved")
     request_count += 1
-    return resp.json()["routes"][0]["polyline"]["geoJsonLinestring"]
+    return (resp.json()["routes"][0]["polyline"]["geoJsonLinestring"],{})
 
 
 def routed_activity_segment(segment):
@@ -97,28 +103,28 @@ def routed_activity_segment(segment):
         return send_route_request(route_request(segment))
 
 
-def features(maps_json):
+def features_and_properties(maps_json):
     return [
         routed_activity_segment(x["activitySegment"]) if "activitySegment" in x else
         place_visit(x["placeVisit"]) if "placeVisit" in x else
-        None
+        (None,None)
         for x in maps_json["timelineObjects"]
     ]
 
-def make_geojson(features):
+def make_geojson(fs_and_ps):
     return {
         "type": "FeatureCollection",
         "features": [
             {
                 "type": "Feature",
-                "properties": {},
+                "properties": properties,
                 "geometry": feature
-            } for feature in features if feature
+            } for feature,properties in fs_and_ps if feature
         ]
     }
 
 def convert_fine_grained(maps_json):
-    return make_geojson(features(maps_json))
+    return make_geojson(features_and_properties(maps_json))
 
 
 
